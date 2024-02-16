@@ -1,0 +1,13 @@
+/* You can add global styles to this file, and also import other style files */
+body {
+  padding: 10px;
+}
+
+@import "ngx-toastr/toastr";
+
+// if you'd like to use it without importing all of bootstrap it requires
+@import 'bootstrap/scss/functions';
+@import 'bootstrap/scss/variables';
+@import 'bootstrap/scss/mixins';
+// boostrap 5
+@import 'ngx-toastr/toastr-bs5-alert';

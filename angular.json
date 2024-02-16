@@ -22,7 +22,8 @@
               "src/manifest.json"
             ],
             "styles": [
-              "src/styles.css",
+              "src/styles.scss",
+              "node_modules/ngx-toastr/toastr.css",
               "node_modules/bootstrap/dist/css/bootstrap.min.css"
             ],
             "scripts": [],
@@ -81,7 +82,7 @@
             "tsConfig": "src/tsconfig.spec.json",
             "scripts": [],
             "styles": [
-              "src/styles.css",
+              "src/styles.scss",
               "node_modules/bootstrap/dist/css/bootstrap.min.css"
             ],
             "assets": [
