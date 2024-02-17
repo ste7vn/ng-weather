@@ -1,0 +1,19 @@
+<div class="tabs-group" *ngIf="tabs.length">
+  <div class="tabs-header">
+    <span
+      *ngFor="let tab of tabs; let index = index"
+      class="tab-entry"
+      [class.active]="tab.active"
+    >
+      <button (click)="selectTab(tab, index)">
+        {{ tab.title }}
+      </button>
+      <i
+        *ngFor="let action of tab.actions"
+        class="bi bi-{{ action.icon }}"
+        (click)="action.action()"
+      ></i>
+    </span>
+  </div>
+  <ng-content></ng-content>
+</div>

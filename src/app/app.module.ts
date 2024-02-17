@@ -14,8 +14,10 @@ import { routing } from "./app.routing";
 import { HttpClientModule } from "@angular/common/http";
 import { ServiceWorkerModule } from "@angular/service-worker";
 import { environment } from "../environments/environment";
-import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
 import { ToastrModule } from "ngx-toastr";
+import { TabsModule } from "./tabs/tabs.module";
+import { ConditionsActionsPipe } from "./current-conditions/conditions-actions.pipe";
 
 @NgModule({
   declarations: [
@@ -23,6 +25,7 @@ import { ToastrModule } from "ngx-toastr";
     ZipcodeEntryComponent,
     ForecastsListComponent,
     CurrentConditionsComponent,
+    ConditionsActionsPipe,
     MainPageComponent,
   ],
   imports: [
@@ -31,6 +34,7 @@ import { ToastrModule } from "ngx-toastr";
     HttpClientModule,
     RouterModule,
     BrowserAnimationsModule,
+    TabsModule,
     ToastrModule.forRoot(),
     routing,
     ServiceWorkerModule.register("/ngsw-worker.js", {
