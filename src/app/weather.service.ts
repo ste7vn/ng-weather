@@ -1,4 +1,13 @@
-import { Injectable, Signal, inject, signal } from "@angular/core";
+import {
+  Inject,
+  Injectable,
+  InjectionToken,
+  Optional,
+  Signal,
+  WritableSignal,
+  inject,
+  signal,
+} from "@angular/core";
 import { Observable, Subject, forkJoin, of, zip } from "rxjs";
 import {
   catchError,
@@ -14,8 +23,16 @@ import { CurrentConditions } from "./current-conditions/current-conditions.type"
 import { ConditionsAndZip } from "./conditions-and-zip.type";
 import { Forecast } from "./forecasts-list/forecast.type";
 import { LocationService } from "./location.service";
-import { takeUntilDestroyed, toObservable } from "@angular/core/rxjs-interop";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ToastrService } from "ngx-toastr";
+
+const CONDITIONS_LS_KEY = "ng-weather-conditions_41163ad4";
+/**
+ * Indicates the duration in seconds to cache the current conditions
+ */
+export const CONDITIONS_CACHE_DURATION = new InjectionToken<number>(
+  "weather.conditions.cache.duration"
+);
 
 @Injectable()
 export class WeatherService {
@@ -23,32 +40,47 @@ export class WeatherService {
   static APPID = "5a4b2d457ecbef9eb2a71e480b947604";
   static ICON_URL =
     "https://raw.githubusercontent.com/udacity/Sunshine-Version-2/sunshine_master/app/src/main/res/drawable-hdpi/";
-  private currentConditions = signal<ConditionsAndZip[]>([]);
+  private currentConditions: WritableSignal<ConditionsAndZip[]>;
   /**
    * Map which holds the zipcode of each request and the subject to cancel the request
    */
   private _queue = new Map<string, Subject<void>>();
+  private _cacheDuration: number;
 
   constructor(
+    @Optional()
+    @Inject(CONDITIONS_CACHE_DURATION)
+    _cacheDuration: number,
     private http: HttpClient,
     private locationService: LocationService,
     private toastr: ToastrService
   ) {
+    this._cacheDuration = (_cacheDuration ?? 7200) * 1000; // default 2 hours
+    // loads the current conditions from local storage on startup
+    const existing = localStorage.getItem(CONDITIONS_LS_KEY);
+    this.currentConditions = signal(existing ? JSON.parse(existing) : []);
+
     this.locationService.locations
       .pipe(
         mergeMap((locations) => this._locationsToConditions(locations)),
-        takeUntilDestroyed() // safe since we are within the main injection context
+        takeUntilDestroyed() // safe since we are within an injection context
       )
       .subscribe((locations) => {
         this.currentConditions.set(
           locations.filter((c) => c.data !== undefined)
         );
+        // updating locations storage
         const error = locations.filter((c) => c.data === undefined);
         this._cancel(error);
         if (error.length) {
           // removing any location that gave error
           this.locationService.removeLocations(error.map((loc) => loc.zip));
         }
+        // storing the current conditions in local storage
+        localStorage.setItem(
+          CONDITIONS_LS_KEY,
+          JSON.stringify(this.currentConditions())
+        );
       });
   }
   /**
@@ -61,10 +93,14 @@ export class WeatherService {
   ): Observable<ConditionsAndZip[]> {
     const current = this.currentConditions();
     const toReplay: string[] = [];
-    const toAdd: string[] = [];
+    const toRequest: string[] = [];
     for (const loc of locations) {
-      if (current.findIndex((c) => c.zip === loc) === -1) {
-        toAdd.push(loc);
+      const idx = current.findIndex((c) => c.zip === loc);
+      if (
+        idx === -1 || // not found
+        current[idx].lastUpdate + this._cacheDuration < Date.now() // found but expired
+      ) {
+        toRequest.push(loc);
       } else {
         toReplay.push(loc);
       }
@@ -78,7 +114,7 @@ export class WeatherService {
       );
     }
 
-    for (const loc of toAdd) {
+    for (const loc of toRequest) {
       obs$.push(this._queueRequest(loc, this._getConditions(loc)));
     }
 
@@ -136,7 +172,7 @@ export class WeatherService {
             );
           return of(undefined);
         }),
-        map((data) => ({ zip: zipcode, data }))
+        map((data) => ({ zip: zipcode, data, lastUpdate: Date.now() }))
       );
   }
 
