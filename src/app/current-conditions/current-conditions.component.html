@@ -1,5 +1,5 @@
 <div>
-  <app-tabs-group [selectedTab]="currentConditionsByZip().length - 1">
+  <app-tabs-group>
     <app-tab
       *ngFor="let location of currentConditionsByZip()"
       title="{{ location.data.name }} ({{ location.zip }})"
