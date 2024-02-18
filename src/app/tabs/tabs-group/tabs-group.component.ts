@@ -21,8 +21,7 @@ export class TabsGroupComponent implements AfterContentInit, OnDestroy {
 
   ngAfterContentInit() {
     this.tabs.changes
-      .pipe(startWith([]))
-      .pipe(takeUntil(this._destroy$))
+      .pipe(startWith([]), takeUntil(this._destroy$))
       .subscribe(() => {
         let activeTabs = this.tabs.filter((tab) => tab.active);
         if (activeTabs.length === 0 && this.tabs.length > 0) {
@@ -39,11 +38,12 @@ export class TabsGroupComponent implements AfterContentInit, OnDestroy {
   }
 
   protected selectTab(tab: TabComponent, index: number) {
-    if (tab.active) return;
     setTimeout(() => {
       // make sure that the change detection is triggered after the tab is selected
-      this.tabs.toArray().forEach((tab) => (tab.active = false));
-      tab.active = true;
+      this.tabs.toArray().forEach((tb, idx) => {
+        if (idx !== index && tb.active) tb.active = false; // avoid setting tab to inactive if it's already inactive
+      });
+      if (!tab.active) tab.active = true;
     });
   }
 }
