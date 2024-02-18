@@ -16,6 +16,7 @@ import {
   mergeMap,
   switchMap,
   takeUntil,
+  tap,
 } from "rxjs/operators";
 
 import { HttpClient } from "@angular/common/http";
@@ -25,8 +26,10 @@ import { Forecast } from "./forecasts-list/forecast.type";
 import { LocationService } from "./location.service";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ToastrService } from "ngx-toastr";
+import { ForecastAndZip } from "./forecast-and-zip.type";
 
 const CONDITIONS_LS_KEY = "ng-weather-conditions_41163ad4";
+const FORECASTS_LS_KEY = "ng-weather-forecasts_41163ad4";
 /**
  * Indicates the duration in seconds to cache the current conditions
  */
@@ -40,7 +43,9 @@ export class WeatherService {
   static APPID = "5a4b2d457ecbef9eb2a71e480b947604";
   static ICON_URL =
     "https://raw.githubusercontent.com/udacity/Sunshine-Version-2/sunshine_master/app/src/main/res/drawable-hdpi/";
-  private currentConditions: WritableSignal<ConditionsAndZip[]>;
+  private currentConditions: WritableSignal<ConditionsAndZip[]> = signal(
+    this._readConditionsFromCache()
+  );
   /**
    * Map which holds the zipcode of each request and the subject to cancel the request
    */
@@ -56,9 +61,6 @@ export class WeatherService {
     private toastr: ToastrService
   ) {
     this._cacheDuration = (_cacheDuration ?? 7200) * 1000; // default 2 hours
-    // loads the current conditions from local storage on startup
-    const existing = localStorage.getItem(CONDITIONS_LS_KEY);
-    this.currentConditions = signal(existing ? JSON.parse(existing) : []);
 
     this.locationService.locations
       .pipe(
@@ -77,10 +79,7 @@ export class WeatherService {
           this.locationService.removeLocations(error.map((loc) => loc.zip));
         }
         // storing the current conditions in local storage
-        localStorage.setItem(
-          CONDITIONS_LS_KEY,
-          JSON.stringify(this.currentConditions())
-        );
+        this._storeConditionsToCache(this.currentConditions());
       });
   }
   /**
@@ -181,10 +180,80 @@ export class WeatherService {
   }
 
   getForecast(zipcode: string): Observable<Forecast> {
+    const cached = this._getForecastFromCache(zipcode);
+    if (cached) return of(cached);
     // Here we make a request to get the forecast data from the API. Note the use of backticks and an expression to insert the zipcode
-    return this.http.get<Forecast>(
-      `${WeatherService.URL}/forecast/daily?zip=${zipcode},us&units=imperial&cnt=5&APPID=${WeatherService.APPID}`
+    return this.http
+      .get<Forecast>(
+        `${WeatherService.URL}/forecast/daily?zip=${zipcode},us&units=imperial&cnt=5&APPID=${WeatherService.APPID}`
+      )
+      .pipe(tap((forecast) => this._setForecastToCache(zipcode, forecast)));
+  }
+  /**
+   * Retrieves the forecast from the local storage if still valid
+   * @param zipcode Zipcode to search by
+   */
+  private _getForecastFromCache(zipcode: string): Forecast | undefined {
+    const stor = localStorage.getItem(FORECASTS_LS_KEY);
+    const cachedForecasts: ForecastAndZip[] = stor ? JSON.parse(stor) : [];
+    if (!cachedForecasts.length) return undefined;
+    const exists = cachedForecasts.find((f) => f.zip === zipcode);
+    if (exists && exists.lastUpdate + this._cacheDuration < Date.now()) {
+      // expired
+      this._removeForecastFromCache(zipcode);
+      return undefined;
+    }
+    return exists?.data;
+  }
+  /**
+   * Stores forecast data, updating if already exists.
+   */
+  private _setForecastToCache(zipcode: string, forecast: Forecast) {
+    const cachedForecasts = this._readForecastsFromCache();
+    const idx = cachedForecasts.findIndex((f) => f.zip === zipcode);
+    if (idx !== -1) {
+      cachedForecasts[idx].data = forecast;
+      cachedForecasts[idx].lastUpdate = Date.now();
+    } else {
+      cachedForecasts.push({
+        zip: zipcode,
+        data: forecast,
+        lastUpdate: Date.now(),
+      });
+    }
+    this._storeForecastsToCache(cachedForecasts);
+  }
+  /**
+   * Removes the forecast from the local storage
+   */
+  private _removeForecastFromCache(zipcode: string) {
+    const cachedForecasts = this._readForecastsFromCache();
+    this._storeForecastsToCache(
+      cachedForecasts.filter((f) => f.zip !== zipcode)
     );
+  }
+  /**
+   * Reads the forecasts from the local storage.
+   */
+  private _readForecastsFromCache(): ForecastAndZip[] {
+    const stor = localStorage.getItem(FORECASTS_LS_KEY);
+    return stor ? JSON.parse(stor) : [];
+  }
+  /**
+   * Stores forecasts to the local storage
+   */
+  private _storeForecastsToCache(forecasts: ForecastAndZip[]) {
+    localStorage.setItem(FORECASTS_LS_KEY, JSON.stringify(forecasts));
+  }
+  /**
+   * Reads the conditions from the local storage
+   */
+  private _readConditionsFromCache(): ConditionsAndZip[] {
+    const existing = localStorage.getItem(CONDITIONS_LS_KEY);
+    return existing ? JSON.parse(existing) : [];
+  }
+  private _storeConditionsToCache(conditions: ConditionsAndZip[]) {
+    localStorage.setItem(CONDITIONS_LS_KEY, JSON.stringify(conditions));
   }
 
   getWeatherIcon(id): string {
